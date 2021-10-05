@@ -1,0 +1,125 @@
+name: 'CI CD Pipeline'
+description: ' The code going to ci cd pipeline.'
+inputs:
+  SONARCLOUD_Project_Key:  # path
+    description: 'Sonarcloud Project_Key '
+    required: true
+    default: 'enespekdas_ms-ratings-web-master'
+  SONARCLOUD_Organizaton_Name:  # path
+      description: 'Sonarcloud Organization Name '
+      required: true
+      default: 'enespekdas'
+  SONAR_TOKEN:  # path
+      description: 'Sonarcloud get project token '
+      required: true
+      default: 'dd'
+  GITHUB_TOKEN:  # path  
+      description: 'Github get Token '
+      required: true
+      default: 'dd'
+
+  DOCKER_USERNAME:  # path
+    description: 'Dockerhub username '
+    required: true
+    default: 'username'
+  DOCKER_PASSWORD:  # path
+    description: 'Dockerhub password '
+    required: true
+    default: 'passwd'
+  DOCKER_IMAGE_NAME:  # path
+    description: 'image name to be created'
+    required: true
+    default: 'buildah-action'
+  DOCKER_Repository_Project_Tag:  # path
+    description: 'Repository project name  (action-test) '
+    required: true
+    default: 'repo-project-name'
+  DOCKER_Repository_Project_version:  # path
+    description: 'Repository project name (v1) '
+    required: true
+    default: 'latest'
+
+  REGISTRY:  # path
+    description: 'AKS Project Registery '
+    required: true
+    default: 'quay.io'
+  USER_NAME:  # path
+      description: ' AKSRegistery Username '
+      required: true
+      default: 'swoturkey'
+  IMAGE_NAME:  # path
+      description: ' AKS Registery Image Name '
+      required: true
+      default: 'swoturkey/ratings-web'
+  K8S_URL:  # path  
+      description: 'AKS k8s url kubectl config view --minify -o "jsonpath={.clusters[0].cluster.server}" '
+      required: true
+      default: 'dd'
+  K8S_SECRET:
+      description: 'asdas '
+      required: true
+      default: 'dd'
+
+outputs:
+  Result: 
+    description: "Sonarcloud Result"
+    value: "Sonarcloud Analyze finished."
+runs:
+  using: "composite"
+  steps: 
+    - name: Repository Files are downloading
+      uses: actions/checkout@v2
+    - name: SonarCloud Scan
+      uses: sonarsource/sonarcloud-github-action@master
+      with:
+        args: >
+          -Dsonar.projectKey=${{ inputs.SONARCLOUD_Project_Key }}
+          -Dsonar.organization=${{ inputs.SONARCLOUD_Organizaton_Name }}
+        env:
+        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ inputs.SONAR_TOKEN }}
+
+    - run: echo " SonarCloud Code analyze steps finished "
+      shell: bash   
+
+    - name: Echo --> Build image steps are begining
+      run: echo Build image steps are begining
+      shell: bash
+
+    - name: Buildah is building DockerFile
+      run: sudo buildah bud -t ${{ inputs.DOCKER_IMAGE_NAME }}
+      shell: bash
+    - name: Image Control
+      run: sudo buildah images
+      shell: bash
+    - name: Image Push Dockerhub
+      run: sudo buildah push --creds ${{ inputs.DOCKER_USERNAME }}:${{ inputs.DOCKER_PASSWORD }} ${{ inputs.DOCKER_IMAGE_NAME }}:${{ inputs.DOCKER_Repository_Project_version }}  ${{ inputs.DOCKER_USERNAME }}/${{ inputs.DOCKER_Repository_Project_Tag }}:${{ inputs.DOCKER_Repository_Project_version }}
+      shell: bash
+    - name: Image Pull Machine
+      run: sudo buildah pull ${{ inputs.DOCKER_USERNAME }}/${{ inputs.DOCKER_Repository_Project_Tag }}:${{ inputs.DOCKER_Repository_Project_version }}
+      shell: bash
+    - name: Image Run 
+      run: sudo  podman run -it ${{ inputs.DOCKER_USERNAME }}/${{ inputs.DOCKER_Repository_Project_Tag }}:${{ inputs.DOCKER_Repository_Project_version }}
+      shell: bash
+    - name: Image Control
+      run: sudo podman ps -a
+      shell: bash
+    - run: echo " Image Build Steps  finished "
+      shell: bash
+
+    - name: Echo --> Deploy AKS steps are begining
+      run: echo Deploy AKS steps are begining
+      shell: bash
+
+    - uses: azure/k8s-set-context@v1
+      with:
+        method: service-account
+        k8s-url: ${{inputs.K8S_URL}}
+        k8s-secret: ${{ inputs.K8S_SECRET }}
+      id: setcontext
+    - name: get nodes
+      run: kubectl get nodes
+      shell: bash
+    - name: Run Helm Command
+      run: 'helm upgrade -i -f charts/values.yaml ratings-web-prod --values charts/values-prod.yaml charts/ -n default'
+      shell: bash

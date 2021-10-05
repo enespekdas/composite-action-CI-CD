@@ -1,0 +1,1 @@
+Bu composite action , sonarcloud ile kod test ettikten sonra docker hub'a imajı gönderir daha sonra indirip kontrol eder ve aks'ye deploy eder. 
